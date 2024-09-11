@@ -17,7 +17,15 @@ type NtfyChannel struct {
 }
 
 type NtfyNotification interface {
-	ToNtfy() (Message, error)
+	ToNtfy(notify.Notifiable) (Message, error)
+}
+
+type NtfyNotifiable interface {
+	NtfyOptions() (NtfyOptions, error)
+}
+
+type NtfyOptions struct {
+	Auth string `json:"auth,omitempty"`
 }
 
 func New(baseURL string, topic string) *NtfyChannel {
@@ -28,8 +36,8 @@ func New(baseURL string, topic string) *NtfyChannel {
 	}
 }
 
-func (n *NtfyChannel) Notify(ctx context.Context, auth []string, notif notify.Notification) error {
-	body, err := n.notificationToBody(notif)
+func (n *NtfyChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
+	body, err := n.notificationToBody(notifiable, notif)
 	if err != nil {
 		return err
 	}
@@ -54,8 +62,15 @@ func (n *NtfyChannel) Notify(ctx context.Context, auth []string, notif notify.No
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if len(auth) > 0 {
-		req.Header.Set("Authorization", auth[0])
+	if notifiable, ok := notifiable.(NtfyNotifiable); ok {
+		opts, err := notifiable.NtfyOptions()
+		if err != nil {
+			return err
+		}
+
+		if opts.Auth != "" {
+			req.Header.Set("Authorization", opts.Auth)
+		}
 	}
 
 	resp, err := n.client.Do(req)
@@ -71,9 +86,9 @@ func (n *NtfyChannel) Notify(ctx context.Context, auth []string, notif notify.No
 	return nil
 }
 
-func (n *NtfyChannel) notificationToBody(notif notify.Notification) (Message, error) {
+func (n *NtfyChannel) notificationToBody(notifiable notify.Notifiable, notif notify.Notification) (Message, error) {
 	if ntfyNotif, ok := notif.(NtfyNotification); ok {
-		return ntfyNotif.ToNtfy()
+		return ntfyNotif.ToNtfy(notifiable)
 	}
 
 	return Message{

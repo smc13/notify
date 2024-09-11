@@ -17,7 +17,11 @@ type DiscordWebhookChannel struct {
 }
 
 type DiscordWebhookNotification interface {
-	ToDiscordWebhook() (*discordgo.WebhookParams, error)
+	ToDiscordWebhook(notify.Notifiable) (*discordgo.WebhookParams, error)
+}
+
+type DiscordWebhookNotifiable interface {
+	DiscordUserIds() []string
 }
 
 func NewWebhookChannel(id string, token string) *DiscordWebhookChannel {
@@ -40,8 +44,8 @@ func (d *DiscordWebhookChannel) SetParams(params discordgo.WebhookParams) {
 	d.params = params
 }
 
-func (d *DiscordWebhookChannel) Notify(ctx context.Context, userIds []string, notif notify.Notification) error {
-	message, err := d.notificationToDiscordEmbed(notif)
+func (d *DiscordWebhookChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
+	message, err := d.notificationToDiscordEmbed(notifiable, notif)
 	if err != nil {
 		return err
 	}
@@ -50,7 +54,8 @@ func (d *DiscordWebhookChannel) Notify(ctx context.Context, userIds []string, no
 		return nil
 	}
 
-	if len(userIds) > 0 {
+	if notifiable, ok := notifiable.(DiscordWebhookNotifiable); ok {
+		userIds := notifiable.DiscordUserIds()
 		formattedChannels := make([]string, len(userIds))
 		for i, userId := range userIds {
 			formattedChannels[i] = fmt.Sprintf("<@%s>", userId)
@@ -63,9 +68,9 @@ func (d *DiscordWebhookChannel) Notify(ctx context.Context, userIds []string, no
 	return err
 }
 
-func (d *DiscordWebhookChannel) notificationToDiscordEmbed(notif notify.Notification) (*discordgo.WebhookParams, error) {
+func (d *DiscordWebhookChannel) notificationToDiscordEmbed(notifiable notify.Notifiable, notif notify.Notification) (*discordgo.WebhookParams, error) {
 	if discordNotif, ok := notif.(DiscordWebhookNotification); ok {
-		return discordNotif.ToDiscordWebhook()
+		return discordNotif.ToDiscordWebhook(notifiable)
 	}
 
 	params := d.params

@@ -2,7 +2,6 @@ package notify
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -75,14 +74,10 @@ func (n *Notify) NotifyConcurrent(ctx context.Context, notifiable Notifiable, no
 }
 
 func (n *Notify) sendToChannel(ctx context.Context, channel Channel, notifiable Notifiable, notif Notification) error {
-	via, err := notifiable.RouteNotificationFor(ctx, channel, notif)
-	if err != nil {
-		if errors.Is(err, ErrSkipNotification) {
-			return nil
-		}
-
-		return err
+	shouldSend := notifiable.ShouldSendNotification(ctx, channel, notif)
+	if !shouldSend {
+		return nil
 	}
 
-	return channel.Notify(ctx, via, notif)
+	return channel.Notify(ctx, notifiable, notif)
 }

@@ -23,9 +23,7 @@ service := notify.New(discordChannel)
 ```
 
 ### Create a Notifiable
-A `Notifiable` is a struct with a `RouteNotificationFor` function that can be used to
-customize channel notifications for the struct.
-It could be used to mention a user by their Discord ID or skip sending to a channel based on user preferences.
+A `Notifiable` is a struct with a `ShouldSendNotification` function that can be used to prevent sending notifications to certain users or channels.
 
 #### Grouped Notifiable
 A `GroupedNotifiable` is provided to allow sending a single notification to multiple notifiables.
@@ -40,20 +38,14 @@ type User struct {
 	EnableTelegram 		bool
 }
 
-func (u User) RouteNotificationFor(ctx context.Context, channel notify.Channel, notif notify.Notification) ([]string, error) {
-	switch channel.(type) {
-		// Mention the discord user by their ID
-		case discord.WebhookChannel:
-			return []string{u.DiscordID}, nil
-		// Skip sending to telegram if the user has it disabled
-		case telegram.TelegramChannel:
-			if !u.EnableTelegram {
-				return nil, notify.ErrSkipNotification
-			}
+func (u *User) ShouldSendNotification(ctx context.Context, channel notify.Channel, notif notify.Notification) bool {
+	// Skip sending to telegram if the user has it disabled
+	if channel, ok := channel.(telegram.TelegramChannel); ok {
+		return u.EnableTelegram
 	}
 
-	// No special routing for this channel but still send
-	return nil, nil
+	// for all other channels, send the notification
+	return true
 }
 ```
 
@@ -63,10 +55,6 @@ At a minimum it requires:
 1. A `Kind` function that identifies the type of notification.
 2. A `Subject` function that provides a short description of the notification.
 3. A `Content` function that provides the full content of the notification.
-
-> [!NOTE]
-> Some channels may allow for more customization of the notification through their own interfaces.
-> Be sure to check the documentation for the channels you are using.
 
 ```go
 type UserRegisteredNotification struct {
@@ -91,6 +79,31 @@ adminUser := User{ID: 2, DiscordID: "1234567890"}
 service.Notify(ctx, adminUser, UserRegisteredNotification{User: newUser})
 ```
 
+## Customisation
+
+### Custom notification content
+Notifications can be customised for each channel by implementing interfaces for the channel.
+As an example, Discord webhooks can be customised by implementing the `DiscordWebhookNotification` interface.
+
+```go
+	func (n UserRegisteredNotification) ToDiscordWebook(notifiable notify.Notifiable) (*discordgo.WebhookEmbed, error) {
+		// create a custom embed for the notification
+	}
+```
+
+#### Custom notifiable options
+Some channels may support additional options for notifiables such as Discord channel ids, email addresses, etc.
+Like notifications, these can be customised by implementing interfaces for the channel.
+```go
+	func (u User) DiscordUserIds() ([]string, error) {
+		// return the discord ids for the user
+	}
+```
+
+> [!IMPORTANT]
+> Since we rely on interfaces for customisation, it's important to ensure that the correct interfaces are implemented.
+> If stricter types are required it is recommended that a cusotm interface is created for your notifiable and notification types.
+
 ## Custom Channels
 Custom channels can be created by implementing the `Channel` interface.
 
@@ -106,15 +119,3 @@ func (c CustomChannel) Notify(ctx context.Context, notifiable notify.Notifiable,
 	return nil
 }
 ```
-
-
-## Todo
-- [ ] Additional channels
-	- [ ] Gotify
-	- [ ] Slack
- 	- [ ] Resend
-  - [ ] SMTP
-  - [ ] Telgram
-  - [ ] Vonage
-  - [ ] Webhook
-- [ ] Add batch notification support

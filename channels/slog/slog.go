@@ -3,7 +3,6 @@ package slog
 import (
 	"context"
 	"log/slog"
-	"strings"
 
 	"github.com/smc13/notify"
 )
@@ -15,7 +14,7 @@ type SlogChannel struct {
 }
 
 type SlogNotification interface {
-	ToSlog() []slog.Attr
+	ToSlog(notify.Notifiable) []slog.Attr
 }
 
 func New(logger *slog.Logger) *SlogChannel {
@@ -37,14 +36,10 @@ func (c *SlogChannel) SetLogMsg(msg string) {
 }
 
 // Notify logs the notification to the slog logger
-func (c *SlogChannel) Notify(ctx context.Context, channels []string, notif notify.Notification) error {
-	attrs := []slog.Attr{slog.String("kind", notif.Kind())}
+func (c *SlogChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
+	attrs := []slog.Attr{slog.String("kind", notif.Kind()), slog.Any("notifiable", notifiable)}
 	if slogNotif, ok := notif.(SlogNotification); ok {
-		attrs = append(attrs, slogNotif.ToSlog()...)
-	}
-
-	if len(channels) > 0 {
-		attrs = append(attrs, slog.String("via", strings.Join(channels, ",")))
+		attrs = append(attrs, slogNotif.ToSlog(notifiable)...)
 	}
 
 	c.logger.LogAttrs(ctx, c.logLevel, c.logMsg, attrs...)

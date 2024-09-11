@@ -6,5 +6,5 @@ import (
 
 type Channel interface {
 	//  Notify sends a notification to this channel
-	Notify(context.Context, []string, Notification) error
+	Notify(context.Context, Notifiable, Notification) error
 }
