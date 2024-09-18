@@ -13,7 +13,6 @@ type DiscordWebhookChannel struct {
 	webhookID    string
 	webhookToken string
 	session      *discordgo.Session
-	params       discordgo.WebhookParams
 }
 
 type DiscordWebhookNotification interface {
@@ -32,6 +31,10 @@ func NewWebhookChannel(id string, token string) *DiscordWebhookChannel {
 		panic(err)
 	}
 
+	return NewWebhookChannelFromSession(session, id, token)
+}
+
+func NewWebhookChannelFromSession(session *discordgo.Session, id string, token string) *DiscordWebhookChannel {
 	return &DiscordWebhookChannel{
 		webhookID:    id,
 		webhookToken: token,
@@ -39,10 +42,7 @@ func NewWebhookChannel(id string, token string) *DiscordWebhookChannel {
 	}
 }
 
-// SetParams sets the webhook params to be sent to the webhook when not using a DiscordWebhookNotification
-func (d *DiscordWebhookChannel) SetParams(params discordgo.WebhookParams) {
-	d.params = params
-}
+func (d *DiscordWebhookChannel) Name() string { return "discord_webhook" }
 
 func (d *DiscordWebhookChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
 	message, err := d.notificationToDiscordEmbed(notifiable, notif)
@@ -73,10 +73,9 @@ func (d *DiscordWebhookChannel) notificationToDiscordEmbed(notifiable notify.Not
 		return discordNotif.ToDiscordWebhook(notifiable)
 	}
 
-	params := d.params
-	params.Embeds = []*discordgo.MessageEmbed{
-		{Title: notif.Subject(), Description: notif.Content()},
-	}
-
-	return &params, nil
+	return &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{
+			{Title: notif.Subject(), Description: notif.Content()},
+		},
+	}, nil
 }

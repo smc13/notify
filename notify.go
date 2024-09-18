@@ -6,16 +6,31 @@ import (
 	"sync"
 )
 
+type Hook func(ctx context.Context, notifiable Notifiable, notif Notification) error
+
 type Notify struct {
-	channels []Channel
+	channels    []Channel
+	beforeHooks []BeforeHook
+	afterHooks  []AfterHook
 }
 
 func NewNotify(channels ...Channel) *Notify {
 	return &Notify{channels: channels}
 }
 
+// AddChannel adds a channel to the list of channels that a notification will be sent through
 func (n *Notify) AddChannel(channel Channel) {
 	n.channels = append(n.channels, channel)
+}
+
+// Before adds a hook that will be called before the notification is sent to all channels
+func (n *Notify) Before(hook BeforeHook) {
+	n.beforeHooks = append(n.beforeHooks, hook)
+}
+
+// After adds a hook that will be called after the notification is sent to all channels
+func (n *Notify) After(hook AfterHook) {
+	n.afterHooks = append(n.afterHooks, hook)
 }
 
 // Notify sends a notification to all channels synchronously
@@ -64,6 +79,11 @@ func (n *Notify) NotifyConcurrent(ctx context.Context, notifiable Notifiable, no
 	for _, channel := range n.channels {
 		go func(channel Channel) {
 			defer result.wg.Done()
+			if err := n.runBeforeHooks(ctx, channel, notifiable, notif); err != nil {
+				result.Errors = append(result.Errors, err)
+				return
+			}
+
 			if err := n.sendToChannel(ctx, channel, notifiable, notif); err != nil {
 				result.Errors = append(result.Errors, err)
 			}
@@ -79,5 +99,27 @@ func (n *Notify) sendToChannel(ctx context.Context, channel Channel, notifiable 
 		return nil
 	}
 
-	return channel.Notify(ctx, notifiable, notif)
+	if err := n.runBeforeHooks(ctx, channel, notifiable, notif); err != nil {
+		return err
+	}
+
+	err := channel.Notify(ctx, notifiable, notif)
+	n.runAfterHooks(ctx, channel, notifiable, notif, err)
+	return err
+}
+
+func (n *Notify) runBeforeHooks(ctx context.Context, channel Channel, notifiable Notifiable, notif Notification) error {
+	for _, hook := range n.beforeHooks {
+		if err := hook(ctx, channel, notifiable, notif); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (n *Notify) runAfterHooks(ctx context.Context, channel Channel, notifiable Notifiable, notif Notification, err error) {
+	for _, hook := range n.afterHooks {
+		hook(ctx, channel, notifiable, notif, err)
+	}
 }

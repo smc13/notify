@@ -33,6 +33,8 @@ func WithFrom(from string) SmtpOption {
 	}
 }
 
+func (c *SmtpChannel) Name() string { return "smtp" }
+
 func (c *SmtpChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
 	message, err := c.notificationToMailMessage(notifiable, notif)
 	if err != nil {

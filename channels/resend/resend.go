@@ -42,6 +42,8 @@ func WithFrom(from string) ResendOption {
 	}
 }
 
+func (c *ResendChannel) Name() string { return "resend" }
+
 func (c *ResendChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
 	message, err := c.notificationToResendMessage(notifiable, notif)
 	if err != nil {

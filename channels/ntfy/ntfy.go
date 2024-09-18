@@ -28,13 +28,34 @@ type NtfyOptions struct {
 	Auth string `json:"auth,omitempty"`
 }
 
-func New(baseURL string, topic string) *NtfyChannel {
-	return &NtfyChannel{
+type NtfyOption func(*NtfyChannel)
+
+func New(baseURL string, opts ...NtfyOption) *NtfyChannel {
+	c := &NtfyChannel{
 		baseURL: baseURL,
-		topic:   topic,
 		client:  &http.Client{},
 	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
+
+func WithTopic(topic string) NtfyOption {
+	return func(c *NtfyChannel) {
+		c.topic = topic
+	}
+}
+
+func WithClient(client *http.Client) NtfyOption {
+	return func(c *NtfyChannel) {
+		c.client = client
+	}
+}
+
+func (n *NtfyChannel) Name() string { return "ntfy" }
 
 func (n *NtfyChannel) Notify(ctx context.Context, notifiable notify.Notifiable, notif notify.Notification) error {
 	body, err := n.notificationToBody(notifiable, notif)
@@ -94,5 +115,6 @@ func (n *NtfyChannel) notificationToBody(notifiable notify.Notifiable, notif not
 	return Message{
 		Title:   notif.Subject(),
 		Message: notif.Content(),
+		Topic:   notif.Kind(),
 	}, nil
 }
